@@ -83,7 +83,9 @@ public class GameOfLife extends JPanel {
   public static void main(final String[] args) {
     // # ensure that the style is the same on all platforms
     try {
-      UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+      System.setProperty("apple.laf.useScreenMenuBar", "true");
+      System.setProperty("com.apple.mrj.application.apple.menu.about.name", "MaXx");
+      UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
     } catch (ClassNotFoundException
         | InstantiationException
         | IllegalAccessException
