@@ -84,7 +84,7 @@ public class GameOfLife extends JPanel {
     // # ensure that the style is the same on all platforms
     try {
       System.setProperty("apple.laf.useScreenMenuBar", "true");
-      System.setProperty("com.apple.mrj.application.apple.menu.about.name", "MaXx");
+      System.setProperty("com.apple.mrj.application.apple.menu.about.name", "Game of Life");
       UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
     } catch (ClassNotFoundException
         | InstantiationException
