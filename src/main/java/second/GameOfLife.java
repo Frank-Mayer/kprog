@@ -1,16 +1,15 @@
 package second;
 
-import javax.swing.*;
-import javax.swing.event.InternalFrameAdapter;
-import javax.swing.event.InternalFrameEvent;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.BitSet;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.swing.*;
+import javax.swing.event.InternalFrameAdapter;
+import javax.swing.event.InternalFrameEvent;
 
 public class GameOfLife extends JPanel {
 
@@ -29,14 +28,6 @@ public class GameOfLife extends JPanel {
   private BitSet worldDataB;
   private boolean paused = true;
 
-  // # free resources
-  public void dispose() {
-    this.sheduler.shutdownNow();
-    this.worldDataA = null;
-    this.worldDataB = null;
-    this.worldUI.dispose();
-  }
-
   public GameOfLife(final int width, final int height) {
 
     // # initialize ui
@@ -46,9 +37,10 @@ public class GameOfLife extends JPanel {
     this.add(this.tpsLabel);
     // ## run button
     final var startBtn = new JButton("Start");
-    startBtn.addActionListener(e -> {
-      startBtn.setText((this.paused = !this.paused) ? "Resume" : "Pause");
-    });
+    startBtn.addActionListener(
+        e -> {
+          startBtn.setText((this.paused = !this.paused) ? "Resume" : "Pause");
+        });
     this.add(startBtn);
 
     // # initialize the "world"
@@ -92,8 +84,10 @@ public class GameOfLife extends JPanel {
     // # ensure that the style is the same on all platforms
     try {
       UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
-    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
-             UnsupportedLookAndFeelException ignore) {
+    } catch (ClassNotFoundException
+        | InstantiationException
+        | IllegalAccessException
+        | UnsupportedLookAndFeelException ignore) {
       // ## dann halt nicht 😒
     }
 
@@ -113,10 +107,10 @@ public class GameOfLife extends JPanel {
     menuBar.add(newInstanceMenu);
 
     // ## calculate preferred sub-frame size
-    final var maxWindowBoulds = GraphicsEnvironment.getLocalGraphicsEnvironment()
-        .getMaximumWindowBounds()
-        .getSize();
-    final var maxWindowSide = (int) (Math.min(maxWindowBoulds.width, maxWindowBoulds.height) * 0.75);
+    final var maxWindowBoulds =
+        GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds().getSize();
+    final var maxWindowSide =
+        (int) (Math.min(maxWindowBoulds.width, maxWindowBoulds.height) * 0.75);
     final var preferredFrameSize = new Dimension(maxWindowSide, maxWindowSide);
 
     // ## add menu items for different resolutions
@@ -124,27 +118,39 @@ public class GameOfLife extends JPanel {
       final var res = 1 << i;
       final var menuItem = new JMenuItem(String.format("%dx%d", res, res));
       newInstanceMenu.add(menuItem);
-      menuItem.addActionListener(e -> {
-        // ## create a new internal frame
-        final var inFrame = new JInternalFrame(String.format("Game of Life %dx%d", res, res), true, true, true, true);
-        inFrame.setPreferredSize(preferredFrameSize);
-        final var gol = new GameOfLife(res, res);
-        inFrame.setContentPane(gol);
-        deskPane.add(inFrame);
-        inFrame.pack();
-        inFrame.show();
-        inFrame.addInternalFrameListener(new InternalFrameAdapter() {
-          @Override
-          public void internalFrameClosed(final InternalFrameEvent e) {
-            gol.dispose();
-            deskPane.remove(inFrame);
-          }
-        });
-      });
+      menuItem.addActionListener(
+          e -> {
+            // ## create a new internal frame
+            final var inFrame =
+                new JInternalFrame(
+                    String.format("Game of Life %dx%d", res, res), true, true, true, true);
+            inFrame.setPreferredSize(preferredFrameSize);
+            final var gol = new GameOfLife(res, res);
+            inFrame.setContentPane(gol);
+            deskPane.add(inFrame);
+            inFrame.pack();
+            inFrame.show();
+            inFrame.addInternalFrameListener(
+                new InternalFrameAdapter() {
+                  @Override
+                  public void internalFrameClosed(final InternalFrameEvent e) {
+                    gol.dispose();
+                    deskPane.remove(inFrame);
+                  }
+                });
+          });
     }
 
     window.setVisible(true);
     window.setExtendedState(window.getExtendedState() | JFrame.MAXIMIZED_BOTH);
+  }
+
+  // # free resources
+  public void dispose() {
+    this.sheduler.shutdownNow();
+    this.worldDataA = null;
+    this.worldDataB = null;
+    this.worldUI.dispose();
   }
 
   // # calculate next generation
@@ -198,8 +204,9 @@ public class GameOfLife extends JPanel {
         ++livingNeighbors;
       }
       // #### 6: south-west
-      neighborIndex = i + GameOfLife.this.worldWidth - 1 + GameOfLife.this.worldSize
-          & GameOfLife.this.worldSizeMinusOne;
+      neighborIndex =
+          i + GameOfLife.this.worldWidth - 1 + GameOfLife.this.worldSize
+              & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
@@ -277,7 +284,7 @@ public class GameOfLife extends JPanel {
       int y;
       for (i = 0; i < this.worldSize; ++i) {
         x = i & this.worldWidthMinusOne; // x = i % this.worldWidth;
-        y = i >> this.logWorldWidth;// i / this.worldWidth;
+        y = i >> this.logWorldWidth; // i / this.worldWidth;
         this.buffer.setRGB(x, y, this.worldData.get(i) ? WorldUI.colorAlive : WorldUI.colorDead);
       }
       // ### draw the buffer
