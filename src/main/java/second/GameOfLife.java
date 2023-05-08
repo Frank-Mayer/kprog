@@ -1,11 +1,15 @@
 package second;
 
 import javax.swing.*;
+import javax.swing.event.InternalFrameAdapter;
+import javax.swing.event.InternalFrameEvent;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.BitSet;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class GameOfLife extends JPanel {
@@ -17,11 +21,21 @@ public class GameOfLife extends JPanel {
   private final int worldSizeMinusOne;
   private final WorldUI worldUI;
   private final TPS tpsLabel;
-  private final JLabel threadLabel;
+  private final ScheduledExecutorService sheduler;
+  // # world data
+  // ## primary world data
   private BitSet worldDataA;
+  // ## secondary world data; temporary storage for the next generation
   private BitSet worldDataB;
-  private boolean threadNameUnknown = true;
-  private boolean paused = false;
+  private boolean paused = true;
+
+  // # free resources
+  public void dispose() {
+    this.sheduler.shutdownNow();
+    this.worldDataA = null;
+    this.worldDataB = null;
+    this.worldUI.dispose();
+  }
 
   public GameOfLife(final int width, final int height) {
 
@@ -30,13 +44,10 @@ public class GameOfLife extends JPanel {
     // ## tick time label
     this.tpsLabel = new TPS();
     this.add(this.tpsLabel);
-    // ## thread name label
-    this.threadLabel = new JLabel();
-    this.add(this.threadLabel);
     // ## run button
-    final var startBtn = new JButton("Pause");
+    final var startBtn = new JButton("Start");
     startBtn.addActionListener(e -> {
-      startBtn.setText((this.paused = !this.paused) ? "Run" : "Pause");
+      startBtn.setText((this.paused = !this.paused) ? "Resume" : "Pause");
     });
     this.add(startBtn);
 
@@ -57,7 +68,6 @@ public class GameOfLife extends JPanel {
     }
     // ## world ui to display the world
     this.worldUI = new WorldUI(this.worldDataA, width, height);
-    this.worldUI.setPreferredSize(new Dimension(width, height));
     this.add(this.worldUI);
     // ### add mouse listener to toggle cells
     // this.worldUI.addMouseListener(new MouseAdapter() {
@@ -74,8 +84,8 @@ public class GameOfLife extends JPanel {
     // });
 
     // # start the game loop
-    Executors.newSingleThreadScheduledExecutor()
-        .scheduleWithFixedDelay(this::tick, 100, 1, TimeUnit.MILLISECONDS);
+    this.sheduler = Executors.newSingleThreadScheduledExecutor();
+    this.sheduler.scheduleWithFixedDelay(this::tick, 500, 1, TimeUnit.MILLISECONDS);
   }
 
   public static void main(final String[] args) {
@@ -96,12 +106,42 @@ public class GameOfLife extends JPanel {
     final var deskPane = new JDesktopPane();
     window.add(deskPane);
 
-    // JInternalFrame wird erstellt
-    final var inFrame = new JInternalFrame(null, true, true, true, true);
-    inFrame.add(new GameOfLife(512, 512));
-    deskPane.add(inFrame);
-    inFrame.pack();
-    inFrame.show();
+    // # add a menu bar
+    final var menuBar = new JMenuBar();
+    window.setJMenuBar(menuBar);
+    final var newInstanceMenu = new JMenu("New Instance");
+    menuBar.add(newInstanceMenu);
+
+    // ## calculate preferred sub-frame size
+    final var maxWindowBoulds = GraphicsEnvironment.getLocalGraphicsEnvironment()
+        .getMaximumWindowBounds()
+        .getSize();
+    final var maxWindowSide = (int) (Math.min(maxWindowBoulds.width, maxWindowBoulds.height) * 0.75);
+    final var preferredFrameSize = new Dimension(maxWindowSide, maxWindowSide);
+
+    // ## add menu items for different resolutions
+    for (int i = 7; i < 12; ++i) {
+      final var res = 1 << i;
+      final var menuItem = new JMenuItem(String.format("%dx%d", res, res));
+      newInstanceMenu.add(menuItem);
+      menuItem.addActionListener(e -> {
+        // ## create a new internal frame
+        final var inFrame = new JInternalFrame(String.format("Game of Life %dx%d", res, res), true, true, true, true);
+        inFrame.setPreferredSize(preferredFrameSize);
+        final var gol = new GameOfLife(res, res);
+        inFrame.setContentPane(gol);
+        deskPane.add(inFrame);
+        inFrame.pack();
+        inFrame.show();
+        inFrame.addInternalFrameListener(new InternalFrameAdapter() {
+          @Override
+          public void internalFrameClosed(final InternalFrameEvent e) {
+            gol.dispose();
+            deskPane.remove(inFrame);
+          }
+        });
+      });
+    }
 
     window.setVisible(true);
     window.setExtendedState(window.getExtendedState() | JFrame.MAXIMIZED_BOTH);
@@ -109,12 +149,6 @@ public class GameOfLife extends JPanel {
 
   // # calculate next generation
   private void tick() {
-    // ## set thread name
-    if (this.threadNameUnknown) {
-      this.threadNameUnknown = false;
-      this.threadLabel.setText(Thread.currentThread().getName());
-    }
-
     // ## check if the game is running
     if (this.paused) {
       return;
@@ -185,6 +219,7 @@ public class GameOfLife extends JPanel {
       GameOfLife.this.worldDataB.set(i, livingNeighbors == 3 || alive && livingNeighbors == 2);
     }
 
+    // ## swap the world data a and b; a stays primary
     final var tmp = GameOfLife.this.worldDataA;
     GameOfLife.this.worldDataA = GameOfLife.this.worldDataB;
     GameOfLife.this.worldDataB = tmp;
@@ -202,7 +237,7 @@ public class GameOfLife extends JPanel {
     private static final int colorAlive = 0xFFFFFF;
     private static final int colorDead = 0x000000;
     private final int worldSize;
-    private final int worldWidth;
+    // private final int worldWidth;
     private final int logWorldWidth;
     private final int worldWidthMinusOne;
     private final BufferedImage buffer;
@@ -210,7 +245,7 @@ public class GameOfLife extends JPanel {
 
     public WorldUI(final BitSet worldData, final int worldWidth, final int worldHeight) {
       this.worldData = (BitSet) worldData.clone();
-      this.worldWidth = worldWidth;
+      // this.worldWidth = worldWidth;
       this.logWorldWidth = (int) (Math.log(worldWidth) / Math.log(2));
       this.worldWidthMinusOne = worldWidth - 1;
       this.worldSize = worldWidth * worldHeight;
@@ -248,37 +283,43 @@ public class GameOfLife extends JPanel {
       // ### draw the buffer
       g.drawImage(this.buffer, 0, 0, this.getWidth(), this.getHeight(), null);
     }
+
+    // ## free resources
+    public void dispose() {
+      this.buffer.flush();
+      this.buffer.getGraphics().dispose();
+      this.worldData = null;
+    }
   }
 
   // # component to render the TPS (ticks per second)
   private static class TPS extends JLabel {
 
-    private final double[] timings = new double[10];
+    private final double[] timings = new double[20];
     private int index = 0;
 
     public TPS() {
-      this.setText("TPS: NaN");
+      this.setText("Tick Time: Unknown");
     }
 
     // ## add a new timing in nanoseconds
     public void add(final double time) {
       this.timings[this.index] = time;
-      if (this.index == 9) {
+      if (this.index == 19) { // if (this.index == this.timings.length - 1) {
         this.index = 0;
-        final var tickTimeMS = this.get();
-        this.setText(String.format("TPS: %.2f", 1000d / tickTimeMS));
+        this.setText(String.format("Tick Time: %.2fµs", this.get()));
       } else {
         ++this.index;
       }
     }
 
-    // ## calculate the average time spend for a tick in milliseconds
+    // ## calculate the average time spend for a tick in microseconds
     public double get() {
       double sum = 0d;
       for (final double timing : this.timings) {
         sum += timing;
       }
-      return sum / 10000000d;
+      return sum / 20000d; // return sum / (this.timings.length * 1000000d);
     }
   }
 }
