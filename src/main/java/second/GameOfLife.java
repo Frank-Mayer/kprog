@@ -18,7 +18,8 @@ public class GameOfLife extends JPanel {
   private final WorldUI worldUI;
   private final TPS tpsLabel;
   private final JLabel threadLabel;
-  private BitSet worldData;
+  private BitSet worldDataA;
+  private BitSet worldDataB;
   private boolean threadNameUnknown = true;
   private boolean paused = false;
 
@@ -45,14 +46,17 @@ public class GameOfLife extends JPanel {
     this.worldSizeMinusWorldWidth = this.worldSize - this.worldWidth;
     this.worldSizePlusWorldWidth = this.worldSize + this.worldWidth;
     this.worldSizeMinusOne = this.worldSize - 1;
-    this.worldData = new BitSet(this.worldSize);
+    this.worldDataA = new BitSet(this.worldSize);
+    this.worldDataB = new BitSet(this.worldSize);
     final var rand = new Random();
     for (int i = 0; i < this.worldSize; ++i) {
       // ## randomly decide if the cell is alive or dead
-      this.worldData.set(i, rand.nextBoolean());
+      final var alive = rand.nextBoolean();
+      this.worldDataA.set(i, alive);
+      this.worldDataB.set(i, alive);
     }
     // ## world ui to display the world
-    this.worldUI = new WorldUI(this.worldData, width, height);
+    this.worldUI = new WorldUI(this.worldDataA, width, height);
     this.worldUI.setPreferredSize(new Dimension(width, height));
     this.add(this.worldUI);
     // ### add mouse listener to toggle cells
@@ -117,7 +121,6 @@ public class GameOfLife extends JPanel {
     }
 
     // ## initialize local variables
-    final var newGeneration = new BitSet(this.worldSize);
     int i;
     int livingNeighbors;
     int neighborIndex;
@@ -129,66 +132,68 @@ public class GameOfLife extends JPanel {
     // ## check all cells in the world
     for (i = 0; i < GameOfLife.this.worldSize; ++i) {
       // ### is this cell currently alive?
-      alive = GameOfLife.this.worldData.get(i);
+      alive = GameOfLife.this.worldDataA.get(i);
 
       // ### check all neighbors
       livingNeighbors = 0;
       // #### 1: north
       neighborIndex =
           i + GameOfLife.this.worldSizeMinusWorldWidth & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 2: north-east
       neighborIndex =
           i + GameOfLife.this.worldSizeMinusWorldWidth + 1 & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 3: east
       neighborIndex = i + 1 & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 4: south-east
       neighborIndex = i + GameOfLife.this.worldWidth + 1 & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 5: south
       neighborIndex = i + GameOfLife.this.worldWidth & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 6: south-west
       neighborIndex = i + GameOfLife.this.worldWidth - 1 + GameOfLife.this.worldSize
           & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 7: west
       neighborIndex = i - 1 + GameOfLife.this.worldSize & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 8: north-west
-      neighborIndex = i - GameOfLife.this.worldSizePlusWorldWidth - 1
-          & GameOfLife.this.worldSizeMinusOne;
-      if (GameOfLife.this.worldData.get(neighborIndex)) {
+      neighborIndex =
+          i - GameOfLife.this.worldSizePlusWorldWidth - 1 & GameOfLife.this.worldSizeMinusOne;
+      if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
 
       // #### alive1 = alive0 ? (2 or 3 neighbors) : (3 neighbors)
-      newGeneration.set(i, livingNeighbors == 3 || alive && livingNeighbors == 2);
+      GameOfLife.this.worldDataB.set(i, livingNeighbors == 3 || alive && livingNeighbors == 2);
     }
 
-    GameOfLife.this.worldData = newGeneration;
+    final var tmp = GameOfLife.this.worldDataA;
+    GameOfLife.this.worldDataA = GameOfLife.this.worldDataB;
+    GameOfLife.this.worldDataB = tmp;
 
     // ## calculate time spend for this tick
     this.tpsLabel.add(System.nanoTime() - start);
 
     // ## pass the new generation to the UI
-    this.worldUI.draw(newGeneration);
+    this.worldUI.draw(GameOfLife.this.worldDataA);
   }
 
   // # component to render the world
@@ -197,6 +202,7 @@ public class GameOfLife extends JPanel {
     private static final int colorAlive = 0xFFFFFF;
     private static final int colorDead = 0x000000;
     private final int worldSize;
+    private final int worldWidth;
     private final int logWorldWidth;
     private final int worldWidthMinusOne;
     private final BufferedImage buffer;
@@ -204,7 +210,8 @@ public class GameOfLife extends JPanel {
 
     public WorldUI(final BitSet worldData, final int worldWidth, final int worldHeight) {
       this.worldData = (BitSet) worldData.clone();
-      this.logWorldWidth = (int) Math.log(worldWidth);
+      this.worldWidth = worldWidth;
+      this.logWorldWidth = (int) (Math.log(worldWidth) / Math.log(2));
       this.worldWidthMinusOne = worldWidth - 1;
       this.worldSize = worldWidth * worldHeight;
       this.buffer = new BufferedImage(worldWidth, worldHeight, BufferedImage.TYPE_INT_RGB);
@@ -235,7 +242,7 @@ public class GameOfLife extends JPanel {
       int y;
       for (i = 0; i < this.worldSize; ++i) {
         x = i & this.worldWidthMinusOne; // x = i % this.worldWidth;
-        y = i >> this.logWorldWidth; // y = i / this.worldWidth;
+        y = i >> this.logWorldWidth;// i / this.worldWidth;
         this.buffer.setRGB(x, y, this.worldData.get(i) ? WorldUI.colorAlive : WorldUI.colorDead);
       }
       // ### draw the buffer
