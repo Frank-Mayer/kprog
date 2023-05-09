@@ -7,6 +7,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.util.BitSet;
 import java.util.Random;
+import java.util.Stack;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +22,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.event.InternalFrameAdapter;
@@ -234,6 +236,15 @@ public class GameOfLife extends JPanel {
         newInstanceMenu.add(
             this.makeInternalFrameCreatorMenuItem(deskPane, preferredFrameSize, res));
       }
+
+      final var testMenuItem = new JMenuItem("Test");
+      testMenuItem.addActionListener(
+          e -> {
+            final var inFrame = new TestWindow();
+            inFrame.setPreferredSize(preferredFrameSize);
+            deskPane.add(inFrame);
+          });
+      newInstanceMenu.add(testMenuItem);
     }
 
     // ## create a menu item to create a new internal frame
@@ -257,6 +268,132 @@ public class GameOfLife extends JPanel {
             inFrame.addInternalFrameListener(this.internalFrameClosed);
           });
       return menuItem;
+    }
+  }
+
+  private static class TestWindow extends JInternalFrame {
+
+    private final GameOfLife gameOfLife;
+    private final Stack<BitSet> testsIn = new Stack<>();
+    private final Stack<Boolean> testsOut = new Stack<>();
+    private final int testOutIndex = 5;
+
+    public TestWindow() {
+      super("Test", true, true, true, true);
+
+      this.gameOfLife = new GameOfLife(4, 4);
+      {
+        // input
+        final var in = new BitSet(16);
+        this.testsIn.push(in);
+        // 0000
+        // 1000
+        // 0110
+        // 0000
+        in.set(0, 4, false);
+        in.set(4, true);
+        in.set(5, 9, false);
+        in.set(9, true);
+        in.set(10, true);
+        in.set(11, 16, false);
+        // expected output
+        this.testsOut.push(true);
+      }
+      {
+        // input
+        final var in = new BitSet(16);
+        this.testsIn.push(in);
+        // 0000
+        // 0100
+        // 0010
+        // 0000
+        in.set(5);
+        in.set(10);
+        // expected output
+        this.testsOut.push(false);
+      }
+      {
+        final var in = new BitSet(16);
+        this.testsIn.push(in);
+        // 0100
+        // 1100
+        // 0010
+        // 0000
+        in.set(1);
+        in.set(4);
+        in.set(5);
+        in.set(10);
+        // expected output
+        this.testsOut.push(true);
+      }
+      final var in = new BitSet(16);
+      this.testsIn.push(in);
+      // 1110
+      // 0110
+      // 1000
+      // 0000
+      in.set(0);
+      in.set(1);
+      in.set(2);
+      in.set(5);
+      in.set(6);
+      in.set(8);
+      // expected output
+      this.testsOut.push(false);
+
+      this.setContentPane(this.gameOfLife);
+      this.pack();
+      this.show();
+
+      SwingUtilities.invokeLater(this::runTests);
+    }
+
+    private void runTests() {
+      final var errTxt = new StringBuilder();
+      var i = 0;
+      errTxt.append("<html>");
+      while (!this.testsIn.isEmpty() && !this.testsOut.isEmpty()) {
+        final var in = this.testsIn.pop();
+        final var expectedOut = this.testsOut.pop();
+        this.gameOfLife.overwriteWorldData(in);
+        this.gameOfLife.calcTick();
+        final var realOut = this.gameOfLife.worldDataB.get(this.testOutIndex);
+        errTxt.append(
+            String.format(
+                "<p><b>Test %d: %s</b></p>", i, realOut == expectedOut ? "PASSED" : "FAILED"));
+        errTxt.append(String.format("<p>Input: %s</p>", this.displayBitSet(in)));
+        errTxt.append(String.format("<p>Expected: %s</p>", expectedOut));
+        errTxt.append(
+            String.format(
+                "<p>Result: %s</p>",
+                realOut != expectedOut ? this.displayBitSet(this.gameOfLife.worldDataB) : realOut));
+        ++i;
+      }
+      errTxt.append("</html>");
+      final var errLabel = new JLabel();
+      this.setContentPane(errLabel);
+      this.gameOfLife.dispose();
+      errLabel.setText(errTxt.toString());
+      this.pack();
+    }
+
+    private String displayBitSet(final BitSet bs) {
+      final var sb = new StringBuilder();
+      for (var y = 0; y < 4; ++y) {
+        sb.append("<p>");
+        for (var x = 0; x < 4; ++x) {
+          final var i = y * 4 + x;
+          if (i == this.testOutIndex) {
+            sb.append("<b>");
+            sb.append(bs.get(i) ? '1' : '0');
+            sb.append("</b>");
+          } else {
+            sb.append(bs.get(i) ? '1' : '0');
+          }
+        }
+        sb.append("</p>");
+      }
+      return sb.toString();
     }
   }
 
@@ -297,6 +434,7 @@ public class GameOfLife extends JPanel {
   private final int worldSizeMinusOne;
   private final WorldUI worldUI;
   private final TPS tpsLabel;
+
   private final ScheduledExecutorService sheduler;
 
   // # world data
@@ -405,23 +543,21 @@ public class GameOfLife extends JPanel {
   }
 
   // # calculate next generation
-  private void tick() {
-    // ## check if the game is running
-    if (this.paused) {
-      return;
-    }
-
-    // ## save start time
-    final var start = System.nanoTime();
-
+  public void calcTick() {
     // ## initialize local variables
-    int i;
+    int i = 0;
+    int iMinusOne;
+    int iPlusOne;
     int livingNeighbors;
     int neighborIndex;
     boolean alive;
 
     // ## check all cells in the world
-    for (i = 0; i < GameOfLife.this.worldSize; ++i) {
+    while (i < GameOfLife.this.worldSize) {
+      // ### precalculate some indexes
+      iMinusOne = i - 1;
+      iPlusOne = i + 1;
+
       // ### is this cell currently alive?
       alive = GameOfLife.this.worldDataA.get(i);
 
@@ -435,17 +571,17 @@ public class GameOfLife extends JPanel {
       }
       // #### 2: north-east
       neighborIndex =
-          i + GameOfLife.this.worldSizeMinusWorldWidth + 1 & GameOfLife.this.worldSizeMinusOne;
+          iPlusOne + GameOfLife.this.worldSizeMinusWorldWidth & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 3: east
-      neighborIndex = i + 1 & GameOfLife.this.worldSizeMinusOne;
+      neighborIndex = iPlusOne & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 4: south-east
-      neighborIndex = i + GameOfLife.this.worldWidth + 1 & GameOfLife.this.worldSizeMinusOne;
+      neighborIndex = iPlusOne + GameOfLife.this.worldWidth & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
@@ -456,26 +592,42 @@ public class GameOfLife extends JPanel {
       }
       // #### 6: south-west
       neighborIndex =
-          i + GameOfLife.this.worldWidth - 1 + GameOfLife.this.worldSize
+          iMinusOne + GameOfLife.this.worldWidth + GameOfLife.this.worldSize
               & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 7: west
-      neighborIndex = i - 1 + GameOfLife.this.worldSize & GameOfLife.this.worldSizeMinusOne;
+      neighborIndex = iMinusOne + GameOfLife.this.worldSize & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
       // #### 8: north-west
       neighborIndex =
-          i - GameOfLife.this.worldSizePlusWorldWidth - 1 & GameOfLife.this.worldSizeMinusOne;
+          iMinusOne - GameOfLife.this.worldSizePlusWorldWidth & GameOfLife.this.worldSizeMinusOne;
       if (GameOfLife.this.worldDataA.get(neighborIndex)) {
         ++livingNeighbors;
       }
 
       // #### alive1 = alive0 ? (2 or 3 neighbors) : (3 neighbors)
       GameOfLife.this.worldDataB.set(i, livingNeighbors == 3 || alive && livingNeighbors == 2);
+
+      // #### next cell
+      i = iPlusOne;
     }
+  }
+
+  private void tick() {
+    // ## check if the game is running
+    if (this.paused) {
+      return;
+    }
+
+    // ## save start time
+    final var start = System.nanoTime();
+
+    // ## calculate next generation
+    this.calcTick();
 
     // ## calculate time spend for this tick
     final var tickTime = System.nanoTime() - start;
@@ -508,6 +660,12 @@ public class GameOfLife extends JPanel {
   private void clear() {
     this.worldDataA.clear();
     this.worldDataB.clear();
+    this.worldUI.draw(this.worldDataA);
+  }
+
+  private void overwriteWorldData(final BitSet in) {
+    this.worldDataA.clear();
+    this.worldDataA.or(in);
     this.worldUI.draw(this.worldDataA);
   }
 }
