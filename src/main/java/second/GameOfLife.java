@@ -231,7 +231,7 @@ public class GameOfLife extends JPanel {
       final var preferredFrameSize = new Dimension(maxWindowSide, maxWindowSide);
 
       // ## add menu items for different resolutions
-      for (int i = 5; i < 12; ++i) {
+      for (int i = 5; i < 13; ++i) {
         final var res = 1 << i;
         newInstanceMenu.add(
             this.makeInternalFrameCreatorMenuItem(deskPane, preferredFrameSize, res));
