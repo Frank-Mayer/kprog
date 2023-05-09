@@ -41,6 +41,7 @@ public class GameOfLife extends JPanel {
     private int colorAlive = 0xFFFFFF;
     private int colorDead = 0x000000;
     private BitSet worldData;
+    private boolean dirty = true;
 
     public WorldUI(final BitSet worldData, final int worldWidth, final int worldHeight) {
       this.worldData = (BitSet) worldData.clone();
@@ -72,22 +73,13 @@ public class GameOfLife extends JPanel {
 
     @Override
     public void paintComponent(final Graphics g) {
-      g.drawImage(this.buffer, 0, 0, this.getWidth(), this.getHeight(), null);
+      this.draw(g);
     }
 
-    // ## default draw method
+    // ## default paint method
     @Override
     public void paint(final Graphics g) {
-      int i;
-      int x;
-      int y;
-      for (i = 0; i < this.worldSize; ++i) {
-        x = i & this.worldWidthMinusOne; // x = i % this.worldWidth;
-        y = i >> this.logWorldWidth; // i / this.worldWidth;
-        this.buffer.setRGB(x, y, this.worldData.get(i) ? this.colorAlive : this.colorDead);
-      }
-      // ### draw the buffer
-      g.drawImage(this.buffer, 0, 0, this.getWidth(), this.getHeight(), null);
+      this.draw(g);
     }
 
     // ## free resources
@@ -109,8 +101,20 @@ public class GameOfLife extends JPanel {
       if (g == null) {
         return;
       }
+      this.draw(g);
+    }
 
-      this.paint(g);
+    // ## draw the current worlds state using the given graphics object
+    private void draw(final Graphics g) {
+      int i;
+      int x;
+      int y;
+      for (i = 0; i < this.worldSize; ++i) {
+        x = i & this.worldWidthMinusOne; // x = i % this.worldWidth;
+        y = i >> this.logWorldWidth; // i / this.worldWidth;
+        this.buffer.setRGB(x, y, this.worldData.get(i) ? this.colorAlive : this.colorDead);
+      }
+      g.drawImage(this.buffer, 0, 0, this.getWidth(), this.getHeight(), null);
     }
   }
 
