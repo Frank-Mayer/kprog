@@ -4,6 +4,10 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.GraphicsEnvironment;
+import java.awt.Point;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.awt.image.BufferedImage;
 import java.util.BitSet;
 import java.util.Random;
@@ -30,22 +34,37 @@ import javax.swing.event.InternalFrameEvent;
 
 public class GameOfLife extends JPanel {
 
+  private class State<T> {
+    private T value;
+
+    public State(final T init) {
+      this.value = init;
+    }
+
+    public T get() {
+      return this.value;
+    }
+
+    public void set(final T value) {
+      this.value = value;
+    }
+  }
+
   // # component to render the world
   private static class WorldUI extends JPanel {
 
     private final int worldSize;
-    // private final int worldWidth;
+    private final int worldWidth;
     private final int logWorldWidth;
     private final int worldWidthMinusOne;
     private final BufferedImage buffer;
     private int colorAlive = 0xFFFFFF;
     private int colorDead = 0x000000;
     private BitSet worldData;
-    private boolean dirty = true;
 
     public WorldUI(final BitSet worldData, final int worldWidth, final int worldHeight) {
       this.worldData = (BitSet) worldData.clone();
-      // this.worldWidth = worldWidth;
+      this.worldWidth = worldWidth;
       this.logWorldWidth = (int) (Math.log(worldWidth) / Math.log(2));
       this.worldWidthMinusOne = worldWidth - 1;
       this.worldSize = worldWidth * worldHeight;
@@ -87,6 +106,25 @@ public class GameOfLife extends JPanel {
       this.buffer.flush();
       this.buffer.getGraphics().dispose();
       this.worldData = null;
+    }
+
+    public void togglePoint(final Point point, final boolean state) {
+      final var cellWidth = (double) this.getWidth() / (double) this.worldWidth;
+      final var cellHeight = (double) this.getHeight() / (double) this.worldWidth;
+      final var x = (int) (point.x / cellWidth);
+      final var y = (int) (point.y / cellHeight);
+      final var index = (y * this.worldWidth) + x;
+      this.worldData.set(index, state);
+    }
+
+    public boolean togglePoint(final Point point) {
+      final var cellWidth = (double) this.getWidth() / (double) this.worldWidth;
+      final var cellHeight = (double) this.getHeight() / (double) this.worldWidth;
+      final var x = (int) (point.x / cellWidth);
+      final var y = (int) (point.y / cellHeight);
+      final var index = (y * this.worldWidth) + x;
+      this.worldData.flip(index);
+      return this.worldData.get(index);
     }
 
     // ## draw the given worlds state
@@ -444,7 +482,6 @@ public class GameOfLife extends JPanel {
   // # world data
   // ## primary world data
   private BitSet worldDataA;
-
   // ## secondary world data; temporary storage for the next generation
   private BitSet worldDataB;
 
@@ -492,18 +529,38 @@ public class GameOfLife extends JPanel {
     this.worldUI = new WorldUI(this.worldDataA, width, height);
     this.add(this.worldUI);
     // ### add mouse listener to toggle cells
-    // this.worldUI.addMouseListener(new MouseAdapter() {
-    // @Override
-    // public void mousePressed(final MouseEvent e) {
-    // final double clickX = e.getX();
-    // final double clickY = e.getY();
-    // final double renderWidth = GameOfLife.this.worldUI.getWidth();
-    // final double renderHeight = GameOfLife.this.worldUI.getHeight();
-    // final int x = (int) (clickX / (renderWidth / width));
-    // final int y = (int) (clickY / (renderHeight / height));
-    // GameOfLife.this.worldUI.draw();
-    // }
-    // });
+    final var newState = new State<Boolean>(false);
+    this.worldUI.addMouseListener(
+        new MouseListener() {
+          @Override
+          public void mouseClicked(final MouseEvent e) {}
+
+          @Override
+          public void mousePressed(final MouseEvent e) {
+            newState.set(GameOfLife.this.worldUI.togglePoint(e.getPoint()));
+            GameOfLife.this.worldUI.draw();
+          }
+
+          @Override
+          public void mouseReleased(final MouseEvent e) {}
+
+          @Override
+          public void mouseEntered(final MouseEvent e) {}
+
+          @Override
+          public void mouseExited(final MouseEvent e) {}
+        });
+    this.worldUI.addMouseMotionListener(
+        new MouseMotionListener() {
+          @Override
+          public void mouseDragged(final MouseEvent e) {
+            worldUI.togglePoint(e.getPoint(), newState.get());
+            GameOfLife.this.worldUI.draw();
+          }
+
+          @Override
+          public void mouseMoved(final MouseEvent e) {}
+        });
 
     // # start the game loop
     this.sheduler = Executors.newSingleThreadScheduledExecutor();
@@ -550,18 +607,14 @@ public class GameOfLife extends JPanel {
   public void calcTick() {
     // ## initialize local variables
     int i = 0;
-    int iMinusOne;
-    int iPlusOne;
+    int iMinusOne = -1;
+    int iPlusOne = 1;
     int livingNeighbors;
     int neighborIndex;
     boolean alive;
 
     // ## check all cells in the world
     while (i < GameOfLife.this.worldSize) {
-      // ### precalculate some indexes
-      iMinusOne = i - 1;
-      iPlusOne = i + 1;
-
       // ### is this cell currently alive?
       alive = GameOfLife.this.worldDataA.get(i);
 
@@ -617,7 +670,8 @@ public class GameOfLife extends JPanel {
       GameOfLife.this.worldDataB.set(i, livingNeighbors == 3 || alive && livingNeighbors == 2);
 
       // #### next cell
-      i = iPlusOne;
+      iMinusOne = i;
+      i = iPlusOne++;
     }
   }
 
