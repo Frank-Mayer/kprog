@@ -278,7 +278,7 @@ public class Inspector {
   private String getMethods() {
     final var sb = new StringBuilder();
     final var methods =
-        Arrays.stream(this.clazz.getDeclaredMethods()).sorted(Inspector::methodComparator).toList();
+        Arrays.stream(this.clazz.getMethods()).sorted(Inspector::methodComparator).toList();
     for (final var method : methods) {
       final var ano = method.getAnnotations();
       if (ano.length > 0) {
@@ -318,7 +318,7 @@ public class Inspector {
   private String getFields() {
     final var sb = new StringBuilder();
     final var fields =
-        Arrays.stream(this.clazz.getDeclaredFields()).sorted(Inspector::fieldComparator).toList();
+        Arrays.stream(this.clazz.getFields()).sorted(Inspector::fieldComparator).toList();
     for (final Field field : fields) {
       this.addImport(field.getType());
       final var mod = Modifier.toString(field.getModifiers());
